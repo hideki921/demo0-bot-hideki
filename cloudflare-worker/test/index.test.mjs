@@ -129,6 +129,22 @@ test("start sends the exact welcome text with the Telegram first name", async ()
   assert.deepEqual(sent[0].body.reply_markup, welcomeKeyboard());
 });
 
+test("a booking callback still edits the menu when callback acknowledgement fails", async () => {
+  const originalError = console.error;
+  console.error = () => {};
+  let sent;
+  try {
+    sent = await telegramRequests(callbackUpdate("start"), { TELEGRAM_BOT_TOKEN: "test" }, (request) => {
+      return request.url.endsWith("/answerCallbackQuery") ? new Response("failure", { status: 500 }) : new Response("{}", { status: 200 });
+    });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.deepEqual(sent.map(({ url }) => url.split("/").at(-1)), ["answerCallbackQuery", "editMessageText"]);
+  assert.match(sent[1].body.text, /Выберите услугу/);
+});
+
 test("a name reply asks for the phone number", async () => {
   const sent = await telegramRequests(replyUpdate("\u0410\u043d\u043d\u0430", bookingPrompt("name", booking)));
 

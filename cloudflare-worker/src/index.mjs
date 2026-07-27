@@ -110,9 +110,17 @@ async function sendContactPrompt(env, chatId, prompt, validation) {
   });
 }
 
+async function acknowledgeCallback(env, callbackId) {
+  try {
+    await telegram(env, "answerCallbackQuery", { callback_query_id: callbackId });
+  } catch (error) {
+    console.error("Could not acknowledge Telegram callback", error.message);
+  }
+}
+
 async function handleCallback(env, callback) {
   const [action, serviceId, staffId, date, time] = callback.data.split("|");
-  await telegram(env, "answerCallbackQuery", { callback_query_id: callback.id });
+  await acknowledgeCallback(env, callback.id);
 
   if (action === "start") {
     return edit(env, callback, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u043b\u0443\u0433\u0443:", serviceRows());
