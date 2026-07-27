@@ -9,6 +9,29 @@ export function callbackData(action, ...values) {
   return [action, ...values].join("|");
 }
 
+export function bookingPrompt(kind, booking, name) {
+  const prompt = { kind, ...booking };
+  if (name !== undefined) prompt.name = name;
+  return `booking:${JSON.stringify(prompt)}`;
+}
+
+export function parseBookingPrompt(text) {
+  if (!text.startsWith("booking:")) return null;
+
+  try {
+    return JSON.parse(text.slice("booking:".length));
+  } catch {
+    return null;
+  }
+}
+
+export function welcomeKeyboard() {
+  return keyboard([
+    [button("Р—Р°РїРёСЃР°С‚СЊСЃСЏ", callbackData("service", "haircut"))],
+    [{ text: "РќР°РїРёСЃР°С‚СЊ СЂР°Р·СЂР°Р±РѕС‚С‡РёРєСѓ", url: "https://t.me/hideki_code" }],
+  ]);
+}
+
 export function nextWeekdays(from, count) {
   const result = [];
   const day = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
