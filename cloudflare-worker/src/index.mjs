@@ -1,6 +1,6 @@
 const SERVICES = {
-  haircut: { name: "Стрижка", staff: { alex: "Алексей", maria: "Мария" } },
-  coloring: { name: "Окрашивание", staff: { maria: "Мария" } },
+  haircut: { name: "\u0421\u0442\u0440\u0438\u0436\u043a\u0430", staff: { alex: "\u0410\u043b\u0435\u043a\u0441\u0435\u0439", maria: "\u041c\u0430\u0440\u0438\u044f" } },
+  coloring: { name: "\u041e\u043a\u0440\u0430\u0448\u0438\u0432\u0430\u043d\u0438\u0435", staff: { maria: "\u041c\u0430\u0440\u0438\u044f" } },
 };
 
 const TIMES = ["10:00", "12:00", "14:00", "16:00"];
@@ -10,16 +10,20 @@ export function callbackData(action, ...values) {
 }
 
 export function bookingPrompt(kind, booking, name) {
-  const prompt = { kind, ...booking };
+  const prompt = { ...booking, kind };
   if (name !== undefined) prompt.name = name;
-  return `booking:${JSON.stringify(prompt)}`;
+  const field = kind === "name" ? "\u0438\u043c\u044f" : "\u043d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430";
+  return `\u0412\u0432\u0435\u0434\u0438\u0442\u0435 ${field}.\n\nbooking:${JSON.stringify(prompt)}`;
 }
 
 export function parseBookingPrompt(text) {
-  if (!text.startsWith("booking:")) return null;
+  if (typeof text !== "string") return null;
+  const marker = "booking:";
+  const markerIndex = text.lastIndexOf(marker);
+  if (markerIndex === -1) return null;
 
   try {
-    return JSON.parse(text.slice("booking:".length));
+    return JSON.parse(text.slice(markerIndex + marker.length));
   } catch {
     return null;
   }
@@ -27,8 +31,8 @@ export function parseBookingPrompt(text) {
 
 export function welcomeKeyboard() {
   return keyboard([
-    [button("Р—Р°РїРёСЃР°С‚СЊСЃСЏ", callbackData("service", "haircut"))],
-    [{ text: "РќР°РїРёСЃР°С‚СЊ СЂР°Р·СЂР°Р±РѕС‚С‡РёРєСѓ", url: "https://t.me/hideki_code" }],
+    [button("\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f", callbackData("start"))],
+    [{ text: "\u041d\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0440\u0430\u0437\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0443", url: "https://t.me/hideki_code" }],
   ]);
 }
 
@@ -61,7 +65,25 @@ function bookingText(serviceId, staffId, date, time) {
   const service = SERVICES[serviceId];
   const staff = service?.staff[staffId];
   if (!service || !staff || !TIMES.includes(time)) return null;
-  return `Запись на ${service.name}\nМастер: ${staff}\nДата: ${dateLabel(date)}\nВремя: ${time}`;
+  return `\u0417\u0430\u043f\u0438\u0441\u044c \u043d\u0430 ${service.name}\n\u041c\u0430\u0441\u0442\u0435\u0440: ${staff}\n\u0414\u0430\u0442\u0430: ${dateLabel(date)}\n\u0412\u0440\u0435\u043c\u044f: ${time}`;
+}
+
+function contactSummary(booking, name, phone) {
+  const summary = bookingText(booking.serviceId, booking.staffId, booking.date, booking.time);
+  if (!summary) return null;
+  return `${summary}\n\u0418\u043c\u044f: ${name}\n\u0422\u0435\u043b\u0435\u0444\u043e\u043d: ${phone}`;
+}
+
+function serviceRows() {
+  return Object.entries(SERVICES).map(([id, service]) => [button(service.name, callbackData("service", id))]);
+}
+
+function cancelRows() {
+  return [[button("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", callbackData("cancel"))]];
+}
+
+function welcomeText(firstName) {
+  return `(\u0434\u0435\u043c\u043e-\u0432\u0435\u0440\u0441\u0438\u044f)\n\u0414\u043e\u0431\u0440\u043e \u043f\u043e\u0436\u0430\u043b\u043e\u0432\u0430\u0442\u044c, ${firstName}.\n\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u043b\u0443\u0433\u0443, \u0438 \u043c\u044b \u043f\u043e\u0434\u0431\u0435\u0440\u0451\u043c \u0443\u0434\u043e\u0431\u043d\u043e\u0435 \u0432\u0440\u0435\u043c\u044f.`;
 }
 
 async function telegram(env, method, payload) {
@@ -73,14 +95,6 @@ async function telegram(env, method, payload) {
   if (!response.ok) throw new Error(`Telegram ${method} failed: ${response.status}`);
 }
 
-async function sendServices(env, chatId) {
-  await telegram(env, "sendMessage", {
-    chat_id: chatId,
-    text: "Демо-бот записи\n\nВыберите услугу:",
-    reply_markup: keyboard(Object.entries(SERVICES).map(([id, service]) => [button(service.name, callbackData("service", id))])),
-  });
-}
-
 async function edit(env, callback, text, rows) {
   await telegram(env, "editMessageText", {
     chat_id: callback.message.chat.id,
@@ -90,61 +104,112 @@ async function edit(env, callback, text, rows) {
   });
 }
 
+async function sendContactPrompt(env, chatId, prompt, validation) {
+  await telegram(env, "sendMessage", {
+    chat_id: chatId,
+    text: validation ? `${validation}\n\n${prompt}` : prompt,
+    reply_markup: { force_reply: true, inline_keyboard: cancelRows() },
+  });
+}
+
 async function handleCallback(env, callback) {
   const [action, serviceId, staffId, date, time] = callback.data.split("|");
   await telegram(env, "answerCallbackQuery", { callback_query_id: callback.id });
 
+  if (action === "start") {
+    return edit(env, callback, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u043b\u0443\u0433\u0443:", serviceRows());
+  }
+
   if (action === "service" && SERVICES[serviceId]) {
     const rows = Object.entries(SERVICES[serviceId].staff).map(([id, name]) => [button(name, callbackData("staff", serviceId, id))]);
-    return edit(env, callback, "Выберите мастера:", rows);
+    return edit(env, callback, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043c\u0430\u0441\u0442\u0435\u0440\u0430:", rows);
   }
 
   if (action === "staff" && SERVICES[serviceId]?.staff[staffId]) {
     const rows = nextWeekdays(new Date(), 5).map((day) => [button(dateLabel(day), callbackData("date", serviceId, staffId, day))]);
-    return edit(env, callback, "Выберите дату:", rows);
+    return edit(env, callback, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0430\u0442\u0443:", rows);
   }
 
   if (action === "date" && SERVICES[serviceId]?.staff[staffId] && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const rows = TIMES.map((slot) => [button(slot, callbackData("time", serviceId, staffId, date, slot))]);
-    return edit(env, callback, "Выберите время:", rows);
+    return edit(env, callback, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0440\u0435\u043c\u044f:", rows);
   }
 
   if (action === "time") {
     const summary = bookingText(serviceId, staffId, date, time);
     if (!summary) return;
-    return edit(env, callback, `${summary}\n\nПодтвердить?`, [
-      [button("Подтвердить", callbackData("confirm", serviceId, staffId, date, time))],
-      [button("Начать заново", callbackData("service", "haircut"))],
-    ]);
+    const booking = { serviceId, staffId, date, time };
+    await edit(env, callback, summary, []);
+    return sendContactPrompt(env, callback.message.chat.id, bookingPrompt("name", booking));
   }
 
   if (action === "confirm") {
-    const summary = bookingText(serviceId, staffId, date, time);
-    if (!summary) return;
-    await edit(env, callback, `${summary}\n\n✅ Демо-запись подтверждена.`, []);
+    const summary = callback.message.text;
+    await edit(env, callback, "\u2705 \u0417\u0430\u043f\u0438\u0441\u044c \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430. \u0414\u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0438!", [
+      [button("\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u043f\u0438\u0441\u044c", callbackData("start"))],
+    ]);
     if (env.OWNER_CHAT_ID) {
-      const name = [callback.from.first_name, callback.from.last_name].filter(Boolean).join(" ") || "Без имени";
-      const username = callback.from.username ? ` (@${callback.from.username})` : "";
       await telegram(env, "sendMessage", {
         chat_id: env.OWNER_CHAT_ID,
-        text: `Новая демо-запись\n${name}${username}\n\n${summary}`,
+        text: `\u041d\u043e\u0432\u0430\u044f \u0434\u0435\u043c\u043e-\u0437\u0430\u043f\u0438\u0441\u044c\n\n${summary}`,
       });
     }
+    return;
+  }
+
+  if (action === "cancel") {
+    return edit(env, callback, "\u0417\u0430\u043f\u0438\u0441\u044c \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430.", [
+      [button("\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f", callbackData("start"))],
+    ]);
+  }
+}
+
+async function handleReply(env, message) {
+  const prompt = parseBookingPrompt(message.reply_to_message?.text);
+  if (!prompt || !bookingText(prompt.serviceId, prompt.staffId, prompt.date, prompt.time)) return;
+
+  const value = message.text?.trim();
+  if (prompt.kind === "name") {
+    if (!value) {
+      return sendContactPrompt(env, message.chat.id, bookingPrompt("name", prompt), "\u0418\u043c\u044f \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.");
+    }
+    return sendContactPrompt(env, message.chat.id, bookingPrompt("phone", prompt, value));
+  }
+
+  if (prompt.kind === "phone" && prompt.name) {
+    if (!value) {
+      return sendContactPrompt(env, message.chat.id, bookingPrompt("phone", prompt, prompt.name), "\u041d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430 \u043d\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.");
+    }
+    const summary = contactSummary(prompt, prompt.name, value);
+    if (!summary) return;
+    return telegram(env, "editMessageText", {
+      chat_id: message.chat.id,
+      message_id: message.reply_to_message.message_id,
+      text: summary,
+      reply_markup: keyboard([
+        [button("\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c", callbackData("confirm"))],
+        [button("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", callbackData("cancel"))],
+      ]),
+    });
   }
 }
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    if (request.method === "GET" && url.searchParams.has("health")) {
-      return Response.json({ telegram: env.TELEGRAM_BOT_TOKEN ? "configured" : "not_configured" });
-    }
     if (request.method !== "POST") return new Response("Telegram demo bot", { status: 200 });
     if (env.WEBHOOK_SECRET && request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.WEBHOOK_SECRET) {
       return new Response("Unauthorized", { status: 401 });
     }
     const update = await request.json();
-    if (update.message?.text === "/start") await sendServices(env, update.message.chat.id);
+    if (update.message?.text === "/start") {
+      await telegram(env, "sendMessage", {
+        chat_id: update.message.chat.id,
+        text: welcomeText(update.message.from?.first_name ?? ""),
+        reply_markup: welcomeKeyboard(),
+      });
+    } else if (update.message?.reply_to_message) {
+      await handleReply(env, update.message);
+    }
     if (update.callback_query) await handleCallback(env, update.callback_query);
     return new Response("ok");
   },
