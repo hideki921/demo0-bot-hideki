@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a polished welcome, name and phone collection, cancellation, and developer contact link to the stateless Telegram booking demo.
+**Goal:** Add a polished welcome, name and phone collection, and developer contact link to the stateless Telegram booking demo.
 
 **Architecture:** Keep all booking choices in Telegram callback data. For text inputs, send ForceReply prompts containing a human-readable booking summary; each incoming reply includes its replied-to bot message, which lets the Worker reconstruct the chosen service, staff, date, time, and name without a database. The Worker validates non-empty text before advancing.
 
@@ -14,6 +14,7 @@
 - The welcome text is exactly `(демо-версия)\nДобро пожаловать, <Telegram first name>.\nВыберите услугу, и мы подберём удобное время.`
 - The developer button links to `https://t.me/hideki_code`.
 - `Новая запись` appears only after a confirmed booking; intermediate selection screens do not show `Начать заново`.
+- The demo has no cancellation action.
 - Do not log or commit Telegram secrets.
 
 ---
@@ -94,7 +95,7 @@ git commit -m "Add stateless booking contact prompts"
 
 **Interfaces:**
 - Consumes `bookingPrompt`, `parseBookingPrompt`, and `welcomeKeyboard` from Task 1.
-- Produces a Worker that accepts `/start`, callback selections, replies for name and phone, and final `confirm`, `cancel`, and `start` callbacks.
+- Produces a Worker that accepts `/start`, callback selections, replies for name and phone, and final `confirm` and `start` callbacks.
 
 - [ ] **Step 1: Add a failing handler-level test**
 
@@ -126,7 +127,7 @@ if (update.message?.reply_to_message) {
 }
 ```
 
-Add ForceReply markup to both prompts, `Отменить` callback buttons during contact input and confirmation, and owner notification containing name and phone. Make `Новая запись` appear only in the final success message. Remove the public `?health` route.
+Add ForceReply markup to both prompts and owner notification containing name and phone. Make `Новая запись` appear only in the final success message. Remove the public `?health` route.
 
 - [ ] **Step 4: Verify locally**
 
@@ -145,10 +146,10 @@ npx wrangler deploy --name demo0-bot-hideki
 
 - [ ] **Step 6: Manual Telegram acceptance test**
 
-Run the complete sequence: `/start` → `Записаться` → service → specialist → date → time → name → phone → confirm. Confirm the owner notification includes name and phone; test cancel once; then press `Новая запись` from the success screen.
+Run the complete sequence: `/start` → `Записаться` → service → specialist → date → time → name → phone → confirm. Confirm the owner notification includes name and phone; then press `Новая запись` from the success screen.
 
 ## Self-review
 
-- Spec coverage: Task 1 covers stateless prompt state and the requested welcome/contact button. Task 2 covers data collection, validation, cancellation, confirmation, owner notification, and deployment.
+- Spec coverage: Task 1 covers stateless prompt state and the requested welcome/contact button. Task 2 covers data collection, validation, confirmation, owner notification, and deployment.
 - Placeholder scan: no unfinished requirements or generic implementation steps remain.
 - Type consistency: Task 2 uses the exact utility exports defined by Task 1.
