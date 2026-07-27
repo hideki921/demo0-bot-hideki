@@ -78,10 +78,6 @@ function serviceRows() {
   return Object.entries(SERVICES).map(([id, service]) => [button(service.name, callbackData("service", id))]);
 }
 
-function cancelRows() {
-  return [[button("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", callbackData("cancel"))]];
-}
-
 function welcomeText(firstName) {
   return `(\u0434\u0435\u043c\u043e-\u0432\u0435\u0440\u0441\u0438\u044f)\n\u0414\u043e\u0431\u0440\u043e \u043f\u043e\u0436\u0430\u043b\u043e\u0432\u0430\u0442\u044c, ${firstName}.\n\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0443\u0441\u043b\u0443\u0433\u0443, \u0438 \u043c\u044b \u043f\u043e\u0434\u0431\u0435\u0440\u0451\u043c \u0443\u0434\u043e\u0431\u043d\u043e\u0435 \u0432\u0440\u0435\u043c\u044f.`;
 }
@@ -108,7 +104,7 @@ async function sendContactPrompt(env, chatId, prompt, validation) {
   await telegram(env, "sendMessage", {
     chat_id: chatId,
     text: validation ? `${validation}\n\n${prompt}` : prompt,
-    reply_markup: { force_reply: true, inline_keyboard: cancelRows() },
+    reply_markup: { force_reply: true },
   });
 }
 
@@ -157,11 +153,6 @@ async function handleCallback(env, callback) {
     return;
   }
 
-  if (action === "cancel") {
-    return edit(env, callback, "\u0417\u0430\u043f\u0438\u0441\u044c \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430.", [
-      [button("\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f", callbackData("start"))],
-    ]);
-  }
 }
 
 async function handleReply(env, message) {
@@ -188,7 +179,6 @@ async function handleReply(env, message) {
       text: summary,
       reply_markup: keyboard([
         [button("\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c", callbackData("confirm"))],
-        [button("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", callbackData("cancel"))],
       ]),
     });
   }

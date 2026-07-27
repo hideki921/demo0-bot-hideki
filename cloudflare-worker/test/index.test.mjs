@@ -81,6 +81,10 @@ test("phone prompt retains the entered name", () => {
   assert.equal(parseBookingPrompt(text).name, "\u0410\u043d\u043d\u0430");
 });
 
+test("a non-string booking prompt is rejected", () => {
+  assert.equal(parseBookingPrompt(undefined), null);
+});
+
 test("welcome keyboard links to the developer", () => {
   const keyboard = welcomeKeyboard();
 
@@ -111,8 +115,8 @@ test("a name reply asks for the phone number", async () => {
   assert.match(sent[0].body.text, /\u043d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430/i);
   assert.equal(parseBookingPrompt(sent[0].body.text).kind, "phone");
   assert.equal(parseBookingPrompt(sent[0].body.text).name, "\u0410\u043d\u043d\u0430");
-  assert.equal(sent[0].body.reply_markup.force_reply, true);
-  assert.equal(sent[0].body.reply_markup.inline_keyboard[0][0].text, "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c");
+  assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
+  assert.doesNotMatch(JSON.stringify(sent[0].body), /cancel|\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c/);
 });
 
 test("a phone reply edits the prompt into a complete booking summary", async () => {
@@ -124,7 +128,8 @@ test("a phone reply edits the prompt into a complete booking summary", async () 
   assert.match(sent[0].body.text, /\u0410\u043b\u0435\u043a\u0441\u0435\u0439/);
   assert.match(sent[0].body.text, /\u0410\u043d\u043d\u0430/);
   assert.match(sent[0].body.text, /\+7 999 123-45-67/);
-  assert.deepEqual(sent[0].body.reply_markup.inline_keyboard.map(([item]) => item.text), ["\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c", "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c"]);
+  assert.deepEqual(sent[0].body.reply_markup.inline_keyboard.map(([item]) => item.text), ["\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c"]);
+  assert.doesNotMatch(JSON.stringify(sent[0].body), /cancel|\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c/);
 });
 
 test("a blank name reply repeats the name prompt without advancing", async () => {
@@ -133,6 +138,7 @@ test("a blank name reply repeats the name prompt without advancing", async () =>
   assert.equal(sent.length, 1);
   assert.match(sent[0].body.text, /\u0438\u043c\u044f.*\u043f\u0443\u0441\u0442/i);
   assert.equal(parseBookingPrompt(sent[0].body.text).kind, "name");
+  assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
 });
 
 test("a blank phone reply repeats the phone prompt without advancing", async () => {
@@ -141,4 +147,5 @@ test("a blank phone reply repeats the phone prompt without advancing", async () 
   assert.equal(sent.length, 1);
   assert.match(sent[0].body.text, /\u043d\u043e\u043c\u0435\u0440.*\u043f\u0443\u0441\u0442/i);
   assert.equal(parseBookingPrompt(sent[0].body.text).kind, "phone");
+  assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
 });
