@@ -19,7 +19,7 @@ export function bookingPrompt(kind, booking, name) {
 export function parseBookingPrompt(text) {
   if (typeof text !== "string") return null;
   const marker = "booking:";
-  const markerIndex = text.lastIndexOf(marker);
+  const markerIndex = text.indexOf(marker);
   if (markerIndex === -1) return null;
 
   try {
@@ -139,18 +139,17 @@ async function handleCallback(env, callback) {
     return sendContactPrompt(env, callback.message.chat.id, bookingPrompt("name", booking));
   }
 
-  if (action === "confirm") {
+  if (callback.data === "confirm") {
     const summary = callback.message.text;
-    await edit(env, callback, "\u2705 \u0417\u0430\u043f\u0438\u0441\u044c \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430. \u0414\u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0438!", [
-      [button("\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u043f\u0438\u0441\u044c", callbackData("start"))],
-    ]);
     if (env.OWNER_CHAT_ID) {
       await telegram(env, "sendMessage", {
         chat_id: env.OWNER_CHAT_ID,
         text: `\u041d\u043e\u0432\u0430\u044f \u0434\u0435\u043c\u043e-\u0437\u0430\u043f\u0438\u0441\u044c\n\n${summary}`,
       });
     }
-    return;
+    return edit(env, callback, "\u2705 \u0417\u0430\u043f\u0438\u0441\u044c \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430. \u0414\u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0438!", [
+      [button("\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u043f\u0438\u0441\u044c", callbackData("start"))],
+    ]);
   }
 
 }
@@ -161,15 +160,17 @@ async function handleReply(env, message) {
 
   const value = message.text?.trim();
   if (prompt.kind === "name") {
-    if (!value) {
-      return sendContactPrompt(env, message.chat.id, bookingPrompt("name", prompt), "\u0418\u043c\u044f \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.");
+    if (!value || value.length > 80) {
+      const validation = value ? "\u0418\u043c\u044f \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0434\u043b\u0438\u043d\u043d\u043e\u0435." : "\u0418\u043c\u044f \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.";
+      return sendContactPrompt(env, message.chat.id, bookingPrompt("name", prompt), validation);
     }
     return sendContactPrompt(env, message.chat.id, bookingPrompt("phone", prompt, value));
   }
 
   if (prompt.kind === "phone" && prompt.name) {
-    if (!value) {
-      return sendContactPrompt(env, message.chat.id, bookingPrompt("phone", prompt, prompt.name), "\u041d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430 \u043d\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.");
+    if (!value || value.length > 32) {
+      const validation = value ? "\u041d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430 \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0434\u043b\u0438\u043d\u043d\u044b\u0439." : "\u041d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430 \u043d\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.";
+      return sendContactPrompt(env, message.chat.id, bookingPrompt("phone", prompt, prompt.name), validation);
     }
     const summary = contactSummary(prompt, prompt.name, value);
     if (!summary) return;

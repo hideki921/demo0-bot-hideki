@@ -16,13 +16,14 @@ const booking = {
   time: "12:00",
 };
 
-async function telegramRequests(update, env = { TELEGRAM_BOT_TOKEN: "test" }) {
+async function telegramRequests(update, env = { TELEGRAM_BOT_TOKEN: "test" }, responseFor) {
   const sent = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     if (String(url).startsWith("https://api.telegram.org/")) {
-      sent.push({ url: String(url), method: options.method, body: JSON.parse(options.body) });
-      return new Response("{}", { status: 200 });
+      const request = { url: String(url), method: options.method, body: JSON.parse(options.body) };
+      sent.push(request);
+      return responseFor?.(request) ?? new Response("{}", { status: 200 });
     }
     return originalFetch(url, options);
   };
@@ -45,6 +46,16 @@ function replyUpdate(text, prompt, chatId = 7) {
       chat: { id: chatId },
       text,
       reply_to_message: { message_id: 13, text: prompt },
+    },
+  };
+}
+
+function callbackUpdate(data, text = "\u0417\u0430\u043f\u0438\u0441\u044c") {
+  return {
+    callback_query: {
+      id: "callback-id",
+      data,
+      message: { chat: { id: 7 }, message_id: 13, text },
     },
   };
 }
@@ -79,6 +90,12 @@ test("phone prompt retains the entered name", () => {
   const text = bookingPrompt("phone", booking, "\u0410\u043d\u043d\u0430");
 
   assert.equal(parseBookingPrompt(text).name, "\u0410\u043d\u043d\u0430");
+});
+
+test("booking prompts retain names that contain the prompt marker", () => {
+  const name = "\u0410\u043d\u043d\u0430 booking: \u0418\u0432\u0430\u043d\u043e\u0432\u0430";
+
+  assert.equal(parseBookingPrompt(bookingPrompt("phone", booking, name)).name, name);
 });
 
 test("a non-string booking prompt is rejected", () => {
@@ -148,4 +165,59 @@ test("a blank phone reply repeats the phone prompt without advancing", async () 
   assert.match(sent[0].body.text, /\u043d\u043e\u043c\u0435\u0440.*\u043f\u0443\u0441\u0442/i);
   assert.equal(parseBookingPrompt(sent[0].body.text).kind, "phone");
   assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
+});
+
+test("an overlong name repeats the name prompt", async () => {
+  const sent = await telegramRequests(replyUpdate("\u0410".repeat(81), bookingPrompt("name", booking)));
+
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].body.text, /\u0438\u043c\u044f.*\u0434\u043b\u0438\u043d/i);
+  assert.equal(parseBookingPrompt(sent[0].body.text).kind, "name");
+  assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
+});
+
+test("an overlong phone number repeats the phone prompt", async () => {
+  const sent = await telegramRequests(replyUpdate("1".repeat(33), bookingPrompt("phone", booking, "\u0410\u043d\u043d\u0430")));
+
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].body.text, /\u043d\u043e\u043c\u0435\u0440.*\u0434\u043b\u0438\u043d/i);
+  assert.equal(parseBookingPrompt(sent[0].body.text).kind, "phone");
+  assert.deepEqual(sent[0].body.reply_markup, { force_reply: true });
+});
+
+test("a legacy confirmation callback is ignored", async () => {
+  const sent = await telegramRequests(callbackUpdate("confirm|haircut|alex|2026-07-29|12:00"), { TELEGRAM_BOT_TOKEN: "test", OWNER_CHAT_ID: "99" });
+
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].url, /\/answerCallbackQuery$/);
+});
+
+test("a new confirmation notifies the owner before editing customer success", async () => {
+  const sent = await telegramRequests(callbackUpdate("confirm", "\u0417\u0430\u043f\u0438\u0441\u044c\n\u0418\u043c\u044f: \u0410\u043d\u043d\u0430\n\u0422\u0435\u043b\u0435\u0444\u043e\u043d: +7999"), { TELEGRAM_BOT_TOKEN: "test", OWNER_CHAT_ID: "99" });
+
+  assert.deepEqual(sent.map(({ url }) => url.split("/").at(-1)), ["answerCallbackQuery", "sendMessage", "editMessageText"]);
+  assert.equal(sent[1].body.chat_id, "99");
+  assert.match(sent[1].body.text, /\u0410\u043d\u043d\u0430/);
+  assert.equal(sent[2].body.reply_markup.inline_keyboard[0][0].text, "\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u043f\u0438\u0441\u044c");
+});
+
+test("a failed owner notification prevents the customer success edit", async () => {
+  const attempted = [];
+
+  await assert.rejects(
+    telegramRequests(callbackUpdate("confirm"), { TELEGRAM_BOT_TOKEN: "test", OWNER_CHAT_ID: "99" }, (request) => {
+      attempted.push(request);
+      return request.url.endsWith("/sendMessage") ? new Response("failure", { status: 500 }) : new Response("{}", { status: 200 });
+    }),
+    /Telegram sendMessage failed: 500/,
+  );
+
+  assert.deepEqual(attempted.map(({ url }) => url.split("/").at(-1)), ["answerCallbackQuery", "sendMessage"]);
+});
+
+test("a new confirmation succeeds without an owner chat", async () => {
+  const sent = await telegramRequests(callbackUpdate("confirm"));
+
+  assert.deepEqual(sent.map(({ url }) => url.split("/").at(-1)), ["answerCallbackQuery", "editMessageText"]);
+  assert.equal(sent[1].body.reply_markup.inline_keyboard[0][0].text, "\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u043f\u0438\u0441\u044c");
 });

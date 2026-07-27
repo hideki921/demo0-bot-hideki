@@ -69,3 +69,32 @@
 - The reply-to-message state mechanism, full contact flow, confirmation, owner notification, start menu, and success-only `Новая запись` remain intact.
 - The prompt parser defensively returns `null` for non-string input.
 - No deployment, remote push, dependencies, storage, secrets, or configuration were added or changed.
+
+## Final review fixes
+
+### Files changed
+
+- `cloudflare-worker/src/index.mjs`
+  - Parses the first `booking:` marker so contact names may contain that text.
+  - Accepts only the exact `confirm` callback, preventing legacy callback payloads from confirming a booking.
+  - Delivers the owner notification before the customer success edit, so failed delivery leaves the customer prompt unchanged.
+  - Limits trimmed name and phone values to 80 and 32 Unicode code units respectively.
+- `cloudflare-worker/test/index.test.mjs`
+  - Adds regression tests for marker-containing names, legacy callbacks, successful and failed owner delivery ordering, ownerless confirmation, and overlong contact values.
+
+### TDD and verification
+
+1. `node --test cloudflare-worker/test/index.test.mjs` before the Worker change
+   - Failed as expected: 6 failures for marker parsing, length validation, legacy confirmation, and owner-delivery ordering.
+2. `node --test cloudflare-worker/test/index.test.mjs` after the Worker change
+   - Passed: 19 tests, 0 failures, 0 skipped, 0 todo.
+3. `node --check cloudflare-worker/src/index.mjs`
+   - Passed with exit code 0.
+4. `git diff --check`
+   - Passed with no whitespace errors.
+
+### Self-review
+
+- Contact prompts remain ForceReply-only and cancellation remains absent.
+- Owner delivery failure prevents the customer success edit; ownerless confirmation still succeeds.
+- The Worker remains stateless with no dependencies, secrets, configuration, deployment, or remote push changes.
