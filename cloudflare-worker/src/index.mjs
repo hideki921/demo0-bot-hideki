@@ -10,23 +10,25 @@ export function callbackData(action, ...values) {
 }
 
 export function bookingPrompt(kind, booking, name) {
-  const prompt = { ...booking, kind };
-  if (name !== undefined) prompt.name = name;
   const field = kind === "name" ? "\u0438\u043c\u044f" : "\u043d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430";
-  return `\u0412\u0432\u0435\u0434\u0438\u0442\u0435 ${field}.\n\nbooking:${JSON.stringify(prompt)}`;
+  const service = SERVICES[booking.serviceId];
+  const staff = service?.staff[booking.staffId];
+  if (!service || !staff || !/^\d{4}-\d{2}-\d{2}$/.test(booking.date) || !TIMES.includes(booking.time)) return null;
+  const [year, month, day] = booking.date.split("-");
+  const nameLine = name === undefined ? "" : `\n\u0418\u043c\u044f: ${name}`;
+  return `\u0412\u0432\u0435\u0434\u0438\u0442\u0435 ${field}.\n\n\u0423\u0441\u043b\u0443\u0433\u0430: ${service.name}\n\u041c\u0430\u0441\u0442\u0435\u0440: ${staff}\n\u0414\u0430\u0442\u0430: ${day}.${month}.${year}\n\u0412\u0440\u0435\u043c\u044f: ${booking.time}${nameLine}`;
 }
 
 export function parseBookingPrompt(text) {
   if (typeof text !== "string") return null;
-  const marker = "booking:";
-  const markerIndex = text.indexOf(marker);
-  if (markerIndex === -1) return null;
-
-  try {
-    return JSON.parse(text.slice(markerIndex + marker.length));
-  } catch {
-    return null;
-  }
+  const kind = text.includes("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u043c\u044f.") ? "name" : text.includes("\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430.") ? "phone" : null;
+  const details = text.match(/\u0423\u0441\u043b\u0443\u0433\u0430: ([^\n]+)\n\u041c\u0430\u0441\u0442\u0435\u0440: ([^\n]+)\n\u0414\u0430\u0442\u0430: (\d{2})\.(\d{2})\.(\d{4})\n\u0412\u0440\u0435\u043c\u044f: (\d{2}:\d{2})(?:\n\u0418\u043c\u044f: ([^\n]+))?/);
+  if (!kind || !details) return null;
+  const [, serviceName, staffName, day, month, year, time, name] = details;
+  const serviceId = Object.entries(SERVICES).find(([, service]) => service.name === serviceName)?.[0];
+  const staffId = serviceId && Object.entries(SERVICES[serviceId].staff).find(([, staff]) => staff === staffName)?.[0];
+  if (!serviceId || !staffId) return null;
+  return { kind, serviceId, staffId, date: `${year}-${month}-${day}`, time, ...(name ? { name } : {}) };
 }
 
 export function welcomeKeyboard() {
@@ -158,7 +160,7 @@ async function handleReply(env, message) {
   const prompt = parseBookingPrompt(message.reply_to_message?.text);
   if (!prompt || !bookingText(prompt.serviceId, prompt.staffId, prompt.date, prompt.time)) return;
 
-  const value = message.text?.trim();
+  const value = message.text?.trim().replace(/\s+/g, " ");
   if (prompt.kind === "name") {
     if (!value || value.length > 80) {
       const validation = value ? "\u0418\u043c\u044f \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0434\u043b\u0438\u043d\u043d\u043e\u0435." : "\u0418\u043c\u044f \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u0431\u044b\u0442\u044c \u043f\u0443\u0441\u0442\u044b\u043c.";

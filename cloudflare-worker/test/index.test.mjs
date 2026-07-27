@@ -84,6 +84,11 @@ test("name prompt round-trips a selected booking", () => {
   const text = bookingPrompt("name", booking);
 
   assert.deepEqual(parseBookingPrompt(text), { kind: "name", ...booking });
+  assert.match(text, /Услуга: Стрижка/);
+  assert.match(text, /Мастер: Алексей/);
+  assert.match(text, /Дата: 29\.07\.2026/);
+  assert.match(text, /Время: 12:00/);
+  assert.doesNotMatch(text, /booking:|serviceId|\{.*\}/);
 });
 
 test("phone prompt retains the entered name", () => {
