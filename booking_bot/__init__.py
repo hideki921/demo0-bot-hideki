@@ -1,0 +1,1 @@
+"""Telegram booking demo package."""
