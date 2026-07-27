@@ -112,6 +112,10 @@ async function handleCallback(env, callback) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.searchParams.has("health")) {
+      return Response.json({ telegram: env.TELEGRAM_BOT_TOKEN ? "configured" : "not_configured" });
+    }
     if (request.method !== "POST") return new Response("Telegram demo bot", { status: 200 });
     if (env.WEBHOOK_SECRET && request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.WEBHOOK_SECRET) {
       return new Response("Unauthorized", { status: 401 });
